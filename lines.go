@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 
@@ -17,7 +18,21 @@ func dashedLine(screen *ebiten.Image, x0, y0, x1, y1, dashLength, gapLength, str
 	length := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	angle := math.Atan2(float64(dy), float64(dx))
 
-	for i := float32(0); i < length; i += dashLength + gapLength {
+	interval := dashLength + gapLength
+	dashes := int(length / interval)
+	segment := interval * float32(dashes)
+	bookend := (length - segment) / 2
+
+	fmt.Printf("Length: %f, Bookend: %f, Segment: %f\n", length, bookend, segment)
+
+	startX := x0
+	startY := y0
+	endX := x0 + bookend*float32(math.Cos(angle))
+	endY := y0 + bookend*float32(math.Sin(angle))
+
+	vector.StrokeLine(screen, startX, startY, endX, endY, strokeWidth, color.RGBA{0, 0, 255, 255}, false)
+
+	for i := float32(bookend); i < segment; i += interval {
 		startX := x0 + i*float32(math.Cos(angle))
 		startY := y0 + i*float32(math.Sin(angle))
 		endX := x0 + (i+dashLength)*float32(math.Cos(angle))
@@ -25,6 +40,13 @@ func dashedLine(screen *ebiten.Image, x0, y0, x1, y1, dashLength, gapLength, str
 
 		vector.StrokeLine(screen, startX, startY, endX, endY, strokeWidth, clr, false)
 	}
+
+	startX = x0 + (bookend+segment)*float32(math.Cos(angle))
+	startY = y0 + (bookend+segment)*float32(math.Sin(angle))
+	endX = x0 + length*float32(math.Cos(angle))
+	endY = y0 + length*float32(math.Sin(angle))
+
+	vector.StrokeLine(screen, startX, startY, endX, endY, strokeWidth, color.RGBA{255, 0, 0, 255}, false)
 }
 
 func textDashedLine(screen *ebiten.Image, x0, y0, x1, y1, dashLength, gapLength, strokeWidth float32, clr color.Color, textStr string) {
@@ -35,12 +57,16 @@ func textDashedLine(screen *ebiten.Image, x0, y0, x1, y1, dashLength, gapLength,
 	interval := float64(dashLength + gapLength)
 	offset := float64(dashLength + gapLength/2)
 
+	dashes := int(length / interval)
+	segment := interval * float64(dashes)
+	bookend := (length - segment) / 2
+
 	dashedLine(screen, x0, y0, x1, y1, dashLength, gapLength, strokeWidth, clr)
 
 	gapCount := int(length / interval)
 	for i := 0; i < gapCount; i++ {
-		gapCenterX := float64(x0) + float64(i)*interval*math.Cos(angle) + offset*math.Cos(angle)
-		gapCenterY := float64(y0) + float64(i)*interval*math.Sin(angle) + offset*math.Sin(angle)
+		gapCenterX := float64(x0) + float64(i)*interval*math.Cos(angle) + (offset+bookend)*math.Cos(angle)
+		gapCenterY := float64(y0) + float64(i)*interval*math.Sin(angle) + (offset+bookend)*math.Sin(angle)
 
 		rotatedText(screen, gapCenterX, gapCenterY, angle, clr, textStr, -5)
 	}
@@ -49,6 +75,9 @@ func textDashedLine(screen *ebiten.Image, x0, y0, x1, y1, dashLength, gapLength,
 }
 
 func rotatedText(screen *ebiten.Image, x, y, angle float64, clr color.Color, textStr string, offset float64) {
+	if angle > 1.57 || angle < -1.57 {
+		angle = math.Pi + angle
+	}
 	fontFace := basicfont.Face7x13
 	textWidth := font.MeasureString(fontFace, textStr).Ceil()
 	textHeight := fontFace.Metrics().Ascent.Ceil()

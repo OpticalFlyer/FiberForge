@@ -9,23 +9,31 @@ import (
 )
 
 type Game struct {
-	Points []struct{ X, Y float64 }
+	Points []struct{ X, Y float32 }
 }
 
 func (g *Game) Update() error {
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		mouseX, mouseY := ebiten.CursorPosition()
-		fmt.Printf("Left button released at (%d, %d)\n", mouseX, mouseY)
+		g.Points = append(g.Points, struct{ X, Y float32 }{X: float32(mouseX), Y: float32(mouseY)})
 	}
 
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.White)
+	screen.Fill(color.Black)
 
-	mouseX, mouseY := ebiten.CursorPosition()
-	textDashedLine(screen, 200, 20, float32(mouseX), float32(mouseY), 20, 40, 3, color.RGBA{0, 0, 0, 255}, "UG")
+	dashLength, gapLength := float32(20), float32(40)
+
+	numPoints := len(g.Points)
+	if numPoints > 0 {
+		for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
+			textDashedLine(screen, g.Points[i].X, g.Points[i].Y, g.Points[j].X, g.Points[j].Y, dashLength, gapLength, 3, color.RGBA{255, 255, 255, 255}, "UG")
+		}
+		mouseX, mouseY := ebiten.CursorPosition()
+		textDashedLine(screen, g.Points[numPoints-1].X, g.Points[numPoints-1].Y, float32(mouseX), float32(mouseY), dashLength, gapLength, 3, color.RGBA{255, 255, 255, 255}, "UG")
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -35,7 +43,6 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	ebiten.SetWindowSize(1024, 768)
 	ebiten.SetWindowTitle("Dashed Line Experiment")
-	//ebiten.SetWindowResizable(true)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	if err := ebiten.RunGame(&Game{}); err != nil {
 		fmt.Println(err)
