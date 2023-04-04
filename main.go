@@ -79,7 +79,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	mouseX, mouseY := ebiten.CursorPosition()
 
 	// Draw the crosshair at the mouse position
-	drawCrosshair(screen, float32(mouseX), float32(mouseY), 100, color.RGBA{255, 255, 255, 255})
+	if g.PL_activated {
+		drawCrosshair(screen, float32(mouseX), float32(mouseY), 100, color.RGBA{255, 255, 255, 255})
+	} else {
+		drawSquareCrosshair(screen, float32(mouseX), float32(mouseY), 10, 100, color.RGBA{255, 255, 255, 255})
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -168,4 +172,22 @@ func drawCrosshair(screen *ebiten.Image, x, y, size float32, clr color.Color) {
 	halfSize := size / 2
 	vector.StrokeLine(screen, float32(x)-halfSize, float32(y), float32(x)+halfSize, float32(y), 1, clr, false)
 	vector.StrokeLine(screen, float32(x), float32(y)-halfSize, float32(x), float32(y)+halfSize, 1, clr, false)
+}
+
+func drawSquareCrosshair(screen *ebiten.Image, x, y, squareSize, crosshairSize float32, clr color.Color) {
+	halfSquareSize := squareSize / 2
+	halfCrosshairSize := crosshairSize / 2
+
+	// Draw the square
+	vector.StrokeLine(screen, x-halfSquareSize, y-halfSquareSize, x+halfSquareSize, y-halfSquareSize, 1, clr, false)
+	vector.StrokeLine(screen, x+halfSquareSize, y-halfSquareSize, x+halfSquareSize, y+halfSquareSize, 1, clr, false)
+	vector.StrokeLine(screen, x+halfSquareSize, y+halfSquareSize, x-halfSquareSize, y+halfSquareSize, 1, clr, false)
+	vector.StrokeLine(screen, x-halfSquareSize, y+halfSquareSize, x-halfSquareSize, y-halfSquareSize, 1, clr, false)
+
+	// Draw the crosshair lines
+	vector.StrokeLine(screen, x-halfCrosshairSize, y, x-halfSquareSize, y, 1, clr, false)
+	vector.StrokeLine(screen, x+halfSquareSize, y, x+halfCrosshairSize, y, 1, clr, false)
+	vector.StrokeLine(screen, x, y-halfCrosshairSize, x, y-halfSquareSize, 1, clr, false)
+	vector.StrokeLine(screen, x, y+halfSquareSize, x, y+halfCrosshairSize, 1, clr, false)
+
 }
