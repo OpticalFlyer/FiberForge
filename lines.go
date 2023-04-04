@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"math"
 
@@ -23,7 +22,7 @@ func dashedLine(screen *ebiten.Image, x0, y0, x1, y1, dashLength, gapLength, str
 	segment := interval * float32(dashes)
 	bookend := (length - segment) / 2
 
-	fmt.Printf("Length: %f, Bookend: %f, Segment: %f\n", length, bookend, segment)
+	//fmt.Printf("Length: %f, Bookend: %f, Segment: %f\n", length, bookend, segment)
 
 	startX := x0
 	startY := y0
