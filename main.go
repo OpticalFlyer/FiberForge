@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 )
@@ -73,6 +74,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	g.DrawTextbox(screen, g.ScreenWidth, g.ScreenHeight)
+
+	// Get the current mouse position
+	mouseX, mouseY := ebiten.CursorPosition()
+
+	// Draw the crosshair at the mouse position
+	drawCrosshair(screen, float32(mouseX), float32(mouseY), 100, color.RGBA{255, 255, 255, 255})
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -85,6 +92,9 @@ func main() {
 	ebiten.SetWindowSize(1024, 768)
 	ebiten.SetWindowTitle("Dashed Line Experiment")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+
+	ebiten.SetCursorMode(ebiten.CursorModeHidden)
+
 	if err := ebiten.RunGame(&Game{}); err != nil {
 		fmt.Println(err)
 	}
@@ -152,4 +162,10 @@ func (g *Game) DrawTextbox(screen *ebiten.Image, screenWidth, screenHeight int) 
 
 	textColor := color.White
 	g.drawText(screen, textX, textY, textColor, g.TextBoxText)
+}
+
+func drawCrosshair(screen *ebiten.Image, x, y, size float32, clr color.Color) {
+	halfSize := size / 2
+	vector.StrokeLine(screen, float32(x)-halfSize, float32(y), float32(x)+halfSize, float32(y), 1, clr, false)
+	vector.StrokeLine(screen, float32(x), float32(y)-halfSize, float32(x), float32(y)+halfSize, 1, clr, false)
 }
