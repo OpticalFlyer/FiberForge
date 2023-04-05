@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -21,6 +22,25 @@ type Game struct {
 	Points       []struct{ X, Y float32 }
 	Lines        [][]struct{ X, Y float32 }
 	PL_activated bool
+	mapTile      *ebiten.Image
+}
+
+func Initialize() (*Game, error) {
+	state := &Game{}
+	latitude := 35.4382223973447
+	longitude := -89.82503869316511
+	zoom := 19
+
+	xtile, ytile := latLngToTile(latitude, longitude, zoom)
+	img, err := downloadTileImage(xtile, ytile, zoom)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize your variables here
+	state.mapTile = img
+
+	return state, nil
 }
 
 func (g *Game) Update() error {
@@ -50,6 +70,11 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{0, 0, 25, 255})
+
+	// Draw your images or graphics here
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(50, 50)
+	screen.DrawImage(g.mapTile, op)
 
 	dashLength, gapLength := float32(20), float32(40)
 
@@ -93,13 +118,18 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func main() {
+	fiberforge, err := Initialize()
+	if err != nil {
+		log.Fatalf("Error creating app state: %v", err)
+	}
+
 	ebiten.SetWindowSize(1024, 768)
-	ebiten.SetWindowTitle("Dashed Line Experiment")
+	ebiten.SetWindowTitle("CAD/GIS Experiment")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
 	ebiten.SetCursorMode(ebiten.CursorModeHidden)
 
-	if err := ebiten.RunGame(&Game{}); err != nil {
+	if err := ebiten.RunGame(fiberforge); err != nil {
 		fmt.Println(err)
 	}
 }
