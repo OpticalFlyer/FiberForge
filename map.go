@@ -167,7 +167,7 @@ func screenCoordsToLatLng(screenX, screenY int, game *Game) (float64, float64) {
 	offsetX := float64(screenX - game.ScreenWidth/2)
 	offsetY := float64(screenY - game.ScreenHeight/2)
 
-	deltaLon := offsetX * metersPerPixel / 6371000 * 180 / math.Pi
+	deltaLon := offsetX * metersPerPixel / (6371000 * math.Cos(centerLat*math.Pi/180.0)) * 180 / math.Pi
 	deltaLat := -offsetY * metersPerPixel / 6371000 * 180 / math.Pi
 
 	clickedLat := centerLat + deltaLat

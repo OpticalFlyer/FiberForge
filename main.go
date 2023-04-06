@@ -68,23 +68,31 @@ func (g *Game) Update() error {
 		fmt.Printf("Clicked Latitude: %f, Clicked Longitude: %f\n", clickedLat, clickedLon)
 	}*/
 
-	// Zooming
+	// Zoomers...
 	_, scrollY := ebiten.Wheel()
-
-	// Set the scroll threshold
 	scrollThreshold := 0.2
+	mouseX, mouseY := ebiten.CursorPosition()
 
-	// Zoom in or out based on the scrollY value
-	if scrollY > scrollThreshold {
-		mouseX, mouseY := ebiten.CursorPosition()
-		g.centerLat, g.centerLon = screenCoordsToLatLng(mouseX, mouseY, g)
-		g.zoom++
-	} else if scrollY < -scrollThreshold {
-		g.zoom--
+	if scrollY > scrollThreshold || scrollY < -scrollThreshold {
+		// Calculate the world coordinates before zooming
+		preZoomLat, preZoomLon := screenCoordsToLatLng(mouseX, mouseY, g)
+
+		if scrollY > scrollThreshold {
+			g.zoom++
+		} else if scrollY < -scrollThreshold {
+			g.zoom--
+		}
+
+		// Clamp the zoom level within a valid range (e.g., 0-21 for Google Maps)
+		g.zoom = int(math.Max(0, math.Min(21, float64(g.zoom))))
+
+		// Calculate the world coordinates after zooming
+		postZoomLat, postZoomLon := screenCoordsToLatLng(mouseX, mouseY, g)
+
+		// Adjust the center latitude and longitude to keep the world coordinates at the mouse position locked
+		g.centerLat += preZoomLat - postZoomLat
+		g.centerLon += preZoomLon - postZoomLon
 	}
-
-	// Clamp the zoom level within a valid range (e.g., 0-20 for Google Maps)
-	g.zoom = int(math.Max(0, math.Min(21, float64(g.zoom))))
 
 	// Panning
 	tileWidth := 360 / math.Pow(2, float64(g.zoom))
