@@ -155,7 +155,7 @@ func latLngToTilePixel(lat, lng float64, zoom int) (int, int) {
 }
 
 func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
-	url := fmt.Sprintf("https://mt1.google.com/vt/lyrs=s&x=%d&y=%d&z=%d", x, y, zoom)
+	url := fmt.Sprintf("https://mt1.google.com/vt/lyrs=s,h&x=%d&y=%d&z=%d", x, y, zoom)
 
 	resp, err := http.Get(url)
 	if err != nil {
