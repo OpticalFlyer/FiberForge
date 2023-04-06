@@ -32,9 +32,9 @@ type Game struct {
 
 func Initialize() (*Game, error) {
 	g := &Game{}
-	g.centerLat = 35.438043
-	g.centerLon = -89.825093
-	g.zoom = 19
+	g.centerLat = 35.156072
+	g.centerLon = -90.051911
+	g.zoom = 5
 
 	g.tileCache = NewTileImageCache()
 	return g, nil
