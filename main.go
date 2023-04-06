@@ -214,7 +214,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		drawSquareCrosshair(screen, float32(mouseX), float32(mouseY), 10, 100, color.RGBA{255, 255, 255, 255})
 	}
 
-	debugString := fmt.Sprintf("Zoom: %d", g.zoom)
+	mouseX, mouseY = ebiten.CursorPosition()
+	lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
+	debugString := fmt.Sprintf("Zoom: %d, Coords: %f, %f", g.zoom, lat, lon)
 	ebitenutil.DebugPrint(screen, debugString)
 }
 
