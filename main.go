@@ -62,7 +62,7 @@ func (g *Game) Update() error {
 		g.handleTextInput()
 	}
 
-	// Check for mouse wheel input to control zoom level
+	// Zooming
 	_, scrollY := ebiten.Wheel()
 
 	// Set the scroll threshold
@@ -77,6 +77,27 @@ func (g *Game) Update() error {
 
 	// Clamp the zoom level within a valid range (e.g., 0-20 for Google Maps)
 	g.zoom = int(math.Max(0, math.Min(21, float64(g.zoom))))
+
+	// Panning
+	tileWidth := 360 / math.Pow(2, float64(g.zoom))
+	panSpeed := tileWidth * 0.5
+
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
+		g.centerLon -= panSpeed
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		g.centerLon += panSpeed
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+		g.centerLat += panSpeed
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyDown) {
+		g.centerLat -= panSpeed
+	}
+
+	// Clamp the coordinates to valid values
+	g.centerLat = math.Min(math.Max(g.centerLat, -85.05112878), 85.05112878)
+	g.centerLon = math.Min(math.Max(g.centerLon, -180), 180)
 
 	return nil
 }
@@ -166,6 +187,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing program: %v", err)
 	}
+
+	startWorkerPool(10)
 
 	ebiten.SetWindowSize(1024, 768)
 	ebiten.SetWindowTitle("CAD/GIS Experiment")

@@ -24,6 +24,30 @@ func NewTileImageCache() TileImageCache {
 	}
 }
 
+type DownloadRequest struct {
+	tileCache *TileImageCache
+	zoom      int
+	tileX     int
+	tileY     int
+}
+
+var downloadQueue = make(chan DownloadRequest, 100)
+
+func startWorkerPool(numWorkers int) {
+	for i := 0; i < numWorkers; i++ {
+		go tileDownloader()
+	}
+}
+
+func tileDownloader() {
+	for req := range downloadQueue {
+		img, err := downloadTileImage(req.tileX, req.tileY, req.zoom)
+		if err == nil {
+			req.tileCache.Set(req.zoom, req.tileX, req.tileY, img)
+		}
+	}
+}
+
 func (cache *TileImageCache) Set(zoom, x, y int, img *ebiten.Image) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
@@ -70,7 +94,7 @@ func (cache *TileImageCache) Get(zoom, x, y int) (*ebiten.Image, bool) {
 	}
 }*/
 
-func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoom int, op *ebiten.DrawImageOptions) {
+/*func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoom int, op *ebiten.DrawImageOptions) {
 	cachedImg, ok := tileCache.Get(zoom, tileX, tileY)
 	if ok {
 		screen.DrawImage(cachedImg, op)
@@ -88,6 +112,27 @@ func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoo
 				tileCache.Set(zoom, tileX, tileY, img)
 			}
 		}(tileCache, zoom, tileX, tileY)
+	}
+}*/
+
+func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoom int, op *ebiten.DrawImageOptions) {
+	cachedImg, ok := tileCache.Get(zoom, tileX, tileY)
+	if ok {
+		screen.DrawImage(cachedImg, op)
+	} else {
+		// Create a black placeholder tile and draw it
+		img := ebiten.NewImage(256, 256)
+		solidColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+		img.Fill(solidColor)
+		screen.DrawImage(img, op)
+
+		// Add a download request to the queue
+		downloadQueue <- DownloadRequest{
+			tileCache: tileCache,
+			zoom:      zoom,
+			tileX:     tileX,
+			tileY:     tileY,
+		}
 	}
 }
 
