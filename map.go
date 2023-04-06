@@ -154,6 +154,28 @@ func latLngToTilePixel(lat, lng float64, zoom int) (int, int) {
 	return pixelX, pixelY
 }
 
+func screenCoordsToLatLng(screenX, screenY int, game *Game) (float64, float64) {
+	centerLat := game.centerLat
+	centerLon := game.centerLon
+	zoom := float64(game.zoom)
+
+	tileSize := 256.0
+	scale := tileSize * math.Pow(2, zoom)
+
+	metersPerPixel := math.Cos(centerLat*math.Pi/180.0) * 2 * math.Pi * 6371000 / scale
+
+	offsetX := float64(screenX - game.ScreenWidth/2)
+	offsetY := float64(screenY - game.ScreenHeight/2)
+
+	deltaLon := offsetX * metersPerPixel / 6371000 * 180 / math.Pi
+	deltaLat := -offsetY * metersPerPixel / 6371000 * 180 / math.Pi
+
+	clickedLat := centerLat + deltaLat
+	clickedLon := centerLon + deltaLon
+
+	return clickedLat, clickedLon
+}
+
 func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
 	url := fmt.Sprintf("https://mt1.google.com/vt/lyrs=s,h&x=%d&y=%d&z=%d", x, y, zoom)
 

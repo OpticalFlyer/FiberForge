@@ -62,6 +62,12 @@ func (g *Game) Update() error {
 		g.handleTextInput()
 	}
 
+	/*if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		mouseX, mouseY := ebiten.CursorPosition()
+		clickedLat, clickedLon := screenCoordsToLatLng(mouseX, mouseY, g)
+		fmt.Printf("Clicked Latitude: %f, Clicked Longitude: %f\n", clickedLat, clickedLon)
+	}*/
+
 	// Zooming
 	_, scrollY := ebiten.Wheel()
 
@@ -70,6 +76,8 @@ func (g *Game) Update() error {
 
 	// Zoom in or out based on the scrollY value
 	if scrollY > scrollThreshold {
+		mouseX, mouseY := ebiten.CursorPosition()
+		g.centerLat, g.centerLon = screenCoordsToLatLng(mouseX, mouseY, g)
 		g.zoom++
 	} else if scrollY < -scrollThreshold {
 		g.zoom--
