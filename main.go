@@ -17,17 +17,24 @@ import (
 )
 
 type Game struct {
-	ScreenWidth  int
-	ScreenHeight int
-	TextBoxText  string
-	LastCmdText  string
-	Points       []struct{ X, Y float32 }
-	Lines        [][]struct{ X, Y float32 }
-	PL_activated bool
-	centerLat    float64
-	centerLon    float64
-	zoom         int
-	tileCache    TileImageCache
+	ScreenWidth    int
+	ScreenHeight   int
+	TextBoxText    string
+	LastCmdText    string
+	Points         []struct{ X, Y float32 }
+	Lines          [][]struct{ X, Y float32 }
+	PL_activated   bool
+	centerLat      float64
+	centerLon      float64
+	zoom           int
+	tileCache      TileImageCache
+	panning        bool
+	previousMouseX int
+	previousMouseY int
+	panStartMouseX int
+	panStartMouseY int
+	panStartLat    float64
+	panStartLon    float64
 }
 
 func Initialize() (*Game, error) {
@@ -110,6 +117,25 @@ func (g *Game) Update() error {
 	if ebiten.IsKeyPressed(ebiten.KeyDown) {
 		g.centerLat -= panSpeed
 	}
+
+	// Panning with middle mouse button
+	mouseX, mouseY = ebiten.CursorPosition()
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) || ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		if !g.panning {
+			g.panning = true
+			g.panStartMouseX, g.panStartMouseY = mouseX, mouseY
+			g.panStartLat, g.panStartLon = screenCoordsToLatLng(mouseX, mouseY, g)
+		} else {
+			postZoomLat, postZoomLon := screenCoordsToLatLng(mouseX, mouseY, g)
+			g.centerLat += g.panStartLat - postZoomLat
+			g.centerLon += g.panStartLon - postZoomLon
+		}
+	} else {
+		g.panning = false
+	}
+
+	// Store previous mouse coordinates
+	g.previousMouseX, g.previousMouseY = mouseX, mouseY
 
 	// Clamp the coordinates to valid values
 	g.centerLat = math.Min(math.Max(g.centerLat, -85.05112878), 85.05112878)
