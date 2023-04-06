@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -22,25 +24,20 @@ type Game struct {
 	Points       []struct{ X, Y float32 }
 	Lines        [][]struct{ X, Y float32 }
 	PL_activated bool
-	mapTile      *ebiten.Image
+	centerLat    float64
+	centerLon    float64
+	zoom         int
+	tileCache    TileImageCache
 }
 
 func Initialize() (*Game, error) {
-	state := &Game{}
-	latitude := 35.4382223973447
-	longitude := -89.82503869316511
-	zoom := 19
+	g := &Game{}
+	g.centerLat = 35.438043
+	g.centerLon = -89.825093
+	g.zoom = 19
 
-	xtile, ytile := latLngToTile(latitude, longitude, zoom)
-	img, err := downloadTileImage(xtile, ytile, zoom)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize your variables here
-	state.mapTile = img
-
-	return state, nil
+	g.tileCache = NewTileImageCache()
+	return g, nil
 }
 
 func (g *Game) Update() error {
@@ -65,16 +62,60 @@ func (g *Game) Update() error {
 		g.handleTextInput()
 	}
 
+	// Check for mouse wheel input to control zoom level
+	_, scrollY := ebiten.Wheel()
+
+	// Set the scroll threshold
+	scrollThreshold := 0.2
+
+	// Zoom in or out based on the scrollY value
+	if scrollY > scrollThreshold {
+		g.zoom++
+	} else if scrollY < -scrollThreshold {
+		g.zoom--
+	}
+
+	// Clamp the zoom level within a valid range (e.g., 0-20 for Google Maps)
+	g.zoom = int(math.Max(0, math.Min(21, float64(g.zoom))))
+
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{0, 0, 25, 255})
 
-	// Draw your images or graphics here
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(50, 50)
-	screen.DrawImage(g.mapTile, op)
+	// Calculate the center pixel coordinates of the game window
+	centerX := g.ScreenWidth / 2
+	centerY := g.ScreenHeight / 2
+
+	// Get the tile coordinates and pixel coordinates of the center point
+	tileX, tileY := latLngToTile(g.centerLat, g.centerLon, g.zoom)
+	pixelX, pixelY := latLngToTilePixel(g.centerLat, g.centerLon, g.zoom)
+
+	// Calculate the tile offset to center the pixel coordinates in the game window
+	tileOffsetX := centerX - pixelX
+	tileOffsetY := centerY - pixelY
+
+	// Calculate the number of tiles needed to cover the window horizontally and vertically
+	numHorizontalTiles := (g.ScreenWidth / 256) + 2
+	numVerticalTiles := (g.ScreenHeight / 256) + 2
+
+	// Calculate the starting tile coordinates based on the center tile
+	startTileX := tileX - numHorizontalTiles/2
+	startTileY := tileY - numVerticalTiles/2
+
+	// Draw the tiles within the window
+	for i := 0; i < numHorizontalTiles; i++ {
+		for j := 0; j < numVerticalTiles; j++ {
+			op := &ebiten.DrawImageOptions{}
+			tileOffsetXForTile := tileOffsetX + ((i - numHorizontalTiles/2) * 256)
+			tileOffsetYForTile := tileOffsetY + ((j - numVerticalTiles/2) * 256)
+			op.GeoM.Translate(float64(tileOffsetXForTile), float64(tileOffsetYForTile))
+			drawTile(screen, &g.tileCache, startTileX+i, startTileY+j, g.zoom, op)
+		}
+	}
+
+	// Draw Lines
 
 	dashLength, gapLength := float32(20), float32(40)
 
@@ -109,6 +150,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	} else {
 		drawSquareCrosshair(screen, float32(mouseX), float32(mouseY), 10, 100, color.RGBA{255, 255, 255, 255})
 	}
+
+	debugString := fmt.Sprintf("Zoom: %d", g.zoom)
+	ebitenutil.DebugPrint(screen, debugString)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -120,7 +164,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func main() {
 	fiberforge, err := Initialize()
 	if err != nil {
-		log.Fatalf("Error creating app state: %v", err)
+		log.Fatalf("Error initializing program: %v", err)
 	}
 
 	ebiten.SetWindowSize(1024, 768)

@@ -3,13 +3,93 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"image/color"
 	"image/jpeg"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+type TileImageCache struct {
+	cache map[int]map[int]map[int]*ebiten.Image
+	mu    sync.Mutex
+}
+
+func NewTileImageCache() TileImageCache {
+	return TileImageCache{
+		cache: make(map[int]map[int]map[int]*ebiten.Image),
+	}
+}
+
+func (cache *TileImageCache) Set(zoom, x, y int, img *ebiten.Image) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	if _, ok := cache.cache[zoom]; !ok {
+		cache.cache[zoom] = make(map[int]map[int]*ebiten.Image)
+	}
+	if _, ok := cache.cache[zoom][x]; !ok {
+		cache.cache[zoom][x] = make(map[int]*ebiten.Image)
+	}
+	cache.cache[zoom][x][y] = img
+}
+
+func (cache *TileImageCache) Get(zoom, x, y int) (*ebiten.Image, bool) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	if _, ok := cache.cache[zoom]; !ok {
+		return nil, false
+	}
+	if _, ok := cache.cache[zoom][x]; !ok {
+		return nil, false
+	}
+	img, ok := cache.cache[zoom][x][y]
+	return img, ok
+}
+
+/*func drawTile(screen *ebiten.Image, tileCache TileImageCache, tileX, tileY, zoom int, op *ebiten.DrawImageOptions) {
+	cachedImg, ok := tileCache.Get(zoom, tileX, tileY)
+	if ok {
+		screen.DrawImage(cachedImg, op)
+	} else {
+		img, err := downloadTileImage(tileX, tileY, zoom)
+		if err != nil {
+			img := ebiten.NewImage(256, 256)
+			solidColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+			img.Fill(solidColor)
+			tileCache.Set(zoom, tileX, tileY, img)
+			screen.DrawImage(img, op)
+		} else {
+			tileCache.Set(zoom, tileX, tileY, img)
+			screen.DrawImage(img, op)
+		}
+	}
+}*/
+
+func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoom int, op *ebiten.DrawImageOptions) {
+	cachedImg, ok := tileCache.Get(zoom, tileX, tileY)
+	if ok {
+		screen.DrawImage(cachedImg, op)
+	} else {
+		// Create a black placeholder tile and draw it
+		img := ebiten.NewImage(256, 256)
+		solidColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}
+		img.Fill(solidColor)
+		screen.DrawImage(img, op)
+
+		// Launch a goroutine to download the tile and update the cache
+		go func(tileCache *TileImageCache, zoom, tileX, tileY int) {
+			img, err := downloadTileImage(tileX, tileY, zoom)
+			if err == nil {
+				tileCache.Set(zoom, tileX, tileY, img)
+			}
+		}(tileCache, zoom, tileX, tileY)
+	}
+}
 
 func latLngToTile(lat, lng float64, zoom int) (int, int) {
 	latRad := lat * math.Pi / 180.0
@@ -17,6 +97,16 @@ func latLngToTile(lat, lng float64, zoom int) (int, int) {
 	xtile := int((lng + 180.0) / 360.0 * n)
 	ytile := int((1.0 - math.Log(math.Tan(latRad)+1.0/math.Cos(latRad))/math.Pi) / 2.0 * n)
 	return xtile, ytile
+}
+
+func latLngToTilePixel(lat, lng float64, zoom int) (int, int) {
+	// Calculate the pixel coordinates inside the tile
+	latRad := lat * math.Pi / 180.0
+	n := math.Pow(2, float64(zoom))
+	pixelX := int((lng+180.0)/360.0*n*256.0) % 256
+	pixelY := int((1.0-math.Log(math.Tan(latRad)+1.0/math.Cos(latRad))/math.Pi)/2.0*n*256.0) % 256
+
+	return pixelX, pixelY
 }
 
 func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
@@ -32,7 +122,7 @@ func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
 		return nil, fmt.Errorf("failed to download image: %s", resp.Status)
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
