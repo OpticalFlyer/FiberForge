@@ -21,8 +21,8 @@ type Game struct {
 	ScreenHeight   int
 	TextBoxText    string
 	LastCmdText    string
-	Points         []struct{ X, Y float32 }
-	Lines          [][]struct{ X, Y float32 }
+	Points         []struct{ Lat, Lon float64 }
+	Lines          [][]struct{ Lat, Lon float64 }
 	PL_activated   bool
 	centerLat      float64
 	centerLon      float64
@@ -50,7 +50,9 @@ func Initialize() (*Game, error) {
 func (g *Game) Update() error {
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && g.PL_activated {
 		mouseX, mouseY := ebiten.CursorPosition()
-		g.Points = append(g.Points, struct{ X, Y float32 }{X: float32(mouseX), Y: float32(mouseY)})
+		lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
+		g.Points = append(g.Points, struct{ Lat, Lon float64 }{Lat: lat, Lon: lon})
+		//fmt.Printf("Added Point: %f, %f\n", lat, lon)
 	}
 
 	if inpututil.IsKeyJustReleased(ebiten.KeySpace) || inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
@@ -160,8 +162,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	tileOffsetY := centerY - pixelY
 
 	// Calculate the number of tiles needed to cover the window horizontally and vertically
-	numHorizontalTiles := (g.ScreenWidth / 256) + 2
-	numVerticalTiles := (g.ScreenHeight / 256) + 2
+	//numHorizontalTiles := (g.ScreenWidth / 256) + 2
+	//numVerticalTiles := (g.ScreenHeight / 256) + 2
+
+	// Calculate the number of tiles needed to cover the window horizontally and vertically
+	numHorizontalTiles := int(math.Ceil(float64(g.ScreenWidth)/256)) + 2
+	numVerticalTiles := int(math.Ceil(float64(g.ScreenHeight)/256)) + 2
 
 	// Calculate the starting tile coordinates based on the center tile
 	startTileX := tileX - numHorizontalTiles/2
@@ -181,13 +187,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw Lines
 
 	dashLength, gapLength := float32(20), float32(40)
+	clr := color.RGBA{255, 255, 255, 255}
 
 	// Draw completed lines
 	for _, line := range g.Lines {
 		numPoints := len(line)
 		if numPoints > 0 {
 			for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
-				textDashedLine(screen, line[i].X, line[i].Y, line[j].X, line[j].Y, dashLength, gapLength, 3, color.RGBA{255, 255, 255, 255}, "UG")
+				textDashedLine(screen, line[i].Lat, line[i].Lon, line[j].Lat, line[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F")
 			}
 		}
 	}
@@ -196,10 +203,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	numPoints := len(g.Points)
 	if numPoints > 0 {
 		for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
-			textDashedLine(screen, g.Points[i].X, g.Points[i].Y, g.Points[j].X, g.Points[j].Y, dashLength, gapLength, 3, color.RGBA{255, 255, 255, 255}, "UG")
+			textDashedLine(screen, g.Points[i].Lat, g.Points[i].Lon, g.Points[j].Lat, g.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F")
 		}
 		mouseX, mouseY := ebiten.CursorPosition()
-		textDashedLine(screen, g.Points[numPoints-1].X, g.Points[numPoints-1].Y, float32(mouseX), float32(mouseY), dashLength, gapLength, 3, color.RGBA{255, 255, 255, 255}, "UG")
+		screenX, screenY := screenCoordsToLatLng(mouseX, mouseY, g)
+		textDashedLine(screen, g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F")
 	}
 
 	g.DrawTextbox(screen, g.ScreenWidth, g.ScreenHeight)

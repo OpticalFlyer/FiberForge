@@ -176,6 +176,28 @@ func screenCoordsToLatLng(screenX, screenY int, game *Game) (float64, float64) {
 	return clickedLat, clickedLon
 }
 
+func latLngToScreenCoords(lat, lng, centerLat, centerLon, zoom float64, screenWidth, screenHeight int) (float32, float32) {
+	// Web Mercator projection formulas
+	tileSize := 256.0
+	//scale := tileSize * math.Pow(2, zoom)
+	worldSize := tileSize * math.Pow(2, zoom)
+	origin := worldSize / 2
+
+	// Convert center lat/lon to pixel coordinates
+	centerX := origin + centerLon*math.Pi/180.0*origin/math.Pi
+	centerY := origin - math.Log(math.Tan((centerLat*math.Pi/180.0+math.Pi/2)/2))*origin/math.Pi
+
+	// Convert lat/lon to pixel coordinates
+	x := origin + lng*math.Pi/180.0*origin/math.Pi
+	y := origin - math.Log(math.Tan((lat*math.Pi/180.0+math.Pi/2)/2))*origin/math.Pi
+
+	// Calculate screen coordinates
+	screenX := int(x - centerX + float64(screenWidth)/2)
+	screenY := int(y - centerY + float64(screenHeight)/2)
+
+	return float32(screenX), float32(screenY)
+}
+
 func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
 	url := fmt.Sprintf("https://mt1.google.com/vt/lyrs=s,h&x=%d&y=%d&z=%d", x, y, zoom)
 
