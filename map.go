@@ -223,3 +223,22 @@ func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
 
 	return ebiten.NewImageFromImage(img), nil
 }
+
+func pointLineSegmentDistance(x, y, x1, y1, x2, y2 float64) float64 {
+	// Calculate the squared length of the line segment
+	l2 := math.Pow(x2-x1, 2) + math.Pow(y2-y1, 2)
+	if l2 == 0 {
+		return math.Sqrt(math.Pow(x-x1, 2) + math.Pow(y-y1, 2))
+	}
+
+	// Calculate the projection of the point onto the line segment
+	t := ((x-x1)*(x2-x1) + (y-y1)*(y2-y1)) / l2
+	t = math.Max(0, math.Min(1, t))
+
+	// Calculate the projection point
+	projX := x1 + t*(x2-x1)
+	projY := y1 + t*(y2-y1)
+
+	// Calculate the distance from the point to the projection point
+	return math.Sqrt(math.Pow(x-projX, 2) + math.Pow(y-projY, 2))
+}

@@ -77,10 +77,24 @@ func (g *Game) Update() error {
 		g.handleTextInput()
 	}
 
-	/*if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+	// Determine if line segment is clicked
+	/*if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && !g.PL_activated {
 		mouseX, mouseY := ebiten.CursorPosition()
-		clickedLat, clickedLon := screenCoordsToLatLng(mouseX, mouseY, g)
-		fmt.Printf("Clicked Latitude: %f, Clicked Longitude: %f\n", clickedLat, clickedLon)
+		//lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
+
+		threshold := 5.0 // Adjust the threshold distance as needed
+
+		for _, line := range g.Lines {
+			for i := 0; i < len(line)-1; i++ {
+				startX, startY := latLngToScreenCoords(line[i].Lat, line[i].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight)
+				endX, endY := latLngToScreenCoords(line[i+1].Lat, line[i+1].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight)
+				distance := pointLineSegmentDistance(float64(mouseX), float64(mouseY), float64(startX), float64(startY), float64(endX), float64(endY))
+				if distance <= threshold {
+					// The user clicked on a line segment
+					fmt.Printf("Clicked on line segment %d\n", i)
+				}
+			}
+		}
 	}*/
 
 	// Zoomers...
