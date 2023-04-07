@@ -21,8 +21,8 @@ type Game struct {
 	ScreenHeight   int
 	TextBoxText    string
 	LastCmdText    string
-	Points         []struct{ Lat, Lon float64 }
-	Lines          [][]struct{ Lat, Lon float64 }
+	Points         []struct{ Lat, Lon, Dist float64 }
+	Lines          [][]struct{ Lat, Lon, Dist float64 }
 	PL_activated   bool
 	centerLat      float64
 	centerLon      float64
@@ -51,7 +51,13 @@ func (g *Game) Update() error {
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && g.PL_activated {
 		mouseX, mouseY := ebiten.CursorPosition()
 		lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
-		g.Points = append(g.Points, struct{ Lat, Lon float64 }{Lat: lat, Lon: lon})
+		if len(g.Points) > 0 {
+			prevPoint := len(g.Points) - 1
+			dist := haversine(g.Points[prevPoint].Lat, g.Points[prevPoint].Lon, lat, lon, EarthRadiusFT)
+			g.Points = append(g.Points, struct{ Lat, Lon, Dist float64 }{Lat: lat, Lon: lon, Dist: dist})
+		} else {
+			g.Points = append(g.Points, struct{ Lat, Lon, Dist float64 }{Lat: lat, Lon: lon, Dist: 0.0})
+		}
 		//fmt.Printf("Added Point: %f, %f\n", lat, lon)
 	}
 
@@ -194,7 +200,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		numPoints := len(line)
 		if numPoints > 0 {
 			for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
-				textDashedLine(screen, line[i].Lat, line[i].Lon, line[j].Lat, line[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F")
+				label := fmt.Sprintf("%.0f'", line[j].Dist)
+				textDashedLine(screen, line[i].Lat, line[i].Lon, line[j].Lat, line[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
 			}
 		}
 	}
@@ -203,11 +210,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	numPoints := len(g.Points)
 	if numPoints > 0 {
 		for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
-			textDashedLine(screen, g.Points[i].Lat, g.Points[i].Lon, g.Points[j].Lat, g.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F")
+			label := fmt.Sprintf("%.0f'", g.Points[j].Dist)
+			textDashedLine(screen, g.Points[i].Lat, g.Points[i].Lon, g.Points[j].Lat, g.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
 		}
 		mouseX, mouseY := ebiten.CursorPosition()
 		screenX, screenY := screenCoordsToLatLng(mouseX, mouseY, g)
-		textDashedLine(screen, g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F")
+		dist := haversine(g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, EarthRadiusFT)
+		label := fmt.Sprintf("%.0f'", dist)
+		textDashedLine(screen, g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
 	}
 
 	g.DrawTextbox(screen, g.ScreenWidth, g.ScreenHeight)

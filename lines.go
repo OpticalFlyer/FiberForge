@@ -186,7 +186,7 @@ func textDashedLine(screen *ebiten.Image, lat0, lng0, lat1, lng1, centerLat, cen
 }
 */
 
-func textDashedLine(screen *ebiten.Image, lat0, lng0, lat1, lng1, centerLat, centerLon, zoom float64, screenWidth, screenHeight int, dashLength, gapLength, strokeWidth float32, clr color.Color, textStr string) {
+func textDashedLine(screen *ebiten.Image, lat0, lng0, lat1, lng1, centerLat, centerLon, zoom float64, screenWidth, screenHeight int, dashLength, gapLength, strokeWidth float32, clr color.Color, textStr, label string) {
 	x0, y0 := latLngToScreenCoords(lat0, lng0, centerLat, centerLon, zoom, screenWidth, screenHeight)
 	x1, y1 := latLngToScreenCoords(lat1, lng1, centerLat, centerLon, zoom, screenWidth, screenHeight)
 	dx := x1 - x0
@@ -215,7 +215,7 @@ func textDashedLine(screen *ebiten.Image, lat0, lng0, lat1, lng1, centerLat, cen
 	labelX := float64(x0) + length/2*math.Cos(angle)
 	labelY := float64(y0) + length/2*math.Sin(angle)
 	if labelX >= 0 && labelX <= float64(screenWidth) && labelY >= 0 && labelY <= float64(screenHeight) {
-		rotatedText(screen, labelX, labelY, angle, clr, "SEGMENT LABEL", -20)
+		rotatedText(screen, labelX, labelY, angle, clr, label, -20)
 	}
 }
 
