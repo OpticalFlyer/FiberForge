@@ -24,7 +24,7 @@ func haversine(lat1, lon1, lat2, lon2, EarthRadius float64) float64 {
 	a := math.Pow(math.Sin(dLat/2), 2) + math.Cos(lat1)*math.Cos(lat2)*math.Pow(math.Sin(dLon/2), 2)
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 
-	// Calculate the distance in kilometers
+	// Calculate the distance
 	distance := EarthRadius * c
 	return distance
 }
