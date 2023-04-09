@@ -3,12 +3,13 @@ module github.com/OpticalFlyer/FiberForge
 go 1.20
 
 require (
+	github.com/adrianmo/go-nmea v1.8.0
 	github.com/hajimehoshi/ebiten/v2 v2.5.0
+	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	golang.org/x/image v0.6.0
 )
 
 require (
-	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/ebitengine/purego v0.3.0 // indirect
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20221017161538-93cebf72946b // indirect
 	github.com/jezek/xgb v1.1.0 // indirect
