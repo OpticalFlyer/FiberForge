@@ -5,7 +5,6 @@ go 1.20
 require (
 	github.com/adrianmo/go-nmea v1.8.0
 	github.com/hajimehoshi/ebiten/v2 v2.5.0
-	github.com/lukeroth/gdal v0.0.0-20220614134811-3c605a05e283
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	golang.org/x/image v0.6.0
 )

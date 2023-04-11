@@ -46,8 +46,10 @@ func Initialize() (*Game, error) {
 
 	g.gps = NewGPS()
 
-	// Load the GeoTIFF file
-	//g.LoadGeoTIFF("Memphis SEC.tif")
+	err := LoadKMLFile("test2.kml", g)
+	if err != nil {
+		fmt.Printf("Error loading KML file: %v\n", err)
+	}
 
 	return g, nil
 }
@@ -101,6 +103,8 @@ func (g *Game) Update() error {
 		} else if g.TextBoxText == "OSM" {
 			g.basemap = OSM
 			g.tileCache = NewTileImageCache()
+		} else if g.TextBoxText == "LOADKML" {
+			LoadKMLFile("test.kml", g)
 		}
 		g.TextBoxText = ""
 	} else {
