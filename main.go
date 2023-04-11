@@ -10,8 +10,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
-
-	"github.com/lukeroth/gdal"
 )
 
 type Game struct {
@@ -35,8 +33,6 @@ type Game struct {
 	panStartLat    float64
 	panStartLon    float64
 	gps            *GPS
-	geoTiff        gdal.Dataset
-	geoTiffImage   *ebiten.Image
 }
 
 func Initialize() (*Game, error) {
