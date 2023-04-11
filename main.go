@@ -46,11 +46,6 @@ func Initialize() (*Game, error) {
 
 	g.gps = NewGPS()
 
-	err := LoadKMLFile("test2.kml", g)
-	if err != nil {
-		fmt.Printf("Error loading KML file: %v\n", err)
-	}
-
 	return g, nil
 }
 
