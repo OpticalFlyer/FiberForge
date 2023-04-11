@@ -10,6 +10,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+
+	"os"
+	"path/filepath"
 )
 
 type Game struct {
@@ -99,7 +102,8 @@ func (g *Game) Update() error {
 			g.basemap = OSM
 			g.tileCache = NewTileImageCache()
 		} else if g.TextBoxText == "LOADKML" {
-			LoadKMLFile("test.kml", g)
+			homeDir, _ := os.UserHomeDir()
+			LoadKMLFile(filepath.Join(homeDir, "test.kml"), g)
 		}
 		g.TextBoxText = ""
 	} else {
