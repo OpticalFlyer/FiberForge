@@ -10,11 +10,14 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+
+	"github.com/lukeroth/gdal"
 )
 
 type Game struct {
 	ScreenWidth    int
 	ScreenHeight   int
+	basemap        string
 	TextBoxText    string
 	LastCmdText    string
 	Points         []struct{ Lat, Lon, Dist float64 }
@@ -32,6 +35,8 @@ type Game struct {
 	panStartLat    float64
 	panStartLon    float64
 	gps            *GPS
+	geoTiff        gdal.Dataset
+	geoTiffImage   *ebiten.Image
 }
 
 func Initialize() (*Game, error) {
@@ -39,10 +44,14 @@ func Initialize() (*Game, error) {
 	g.centerLat = 35.156072
 	g.centerLon = -90.051911
 	g.zoom = 5
+	g.basemap = OSM
 
 	g.tileCache = NewTileImageCache()
 
 	g.gps = NewGPS()
+
+	// Load the GeoTIFF file
+	//g.LoadGeoTIFF("Memphis SEC.tif")
 
 	return g, nil
 }
@@ -81,6 +90,21 @@ func (g *Game) Update() error {
 				g.gps.StopGPS() // Call StopGPS on the GPS instance
 			}
 			g.TextBoxText = ""
+		} else if g.TextBoxText == "GOOGLEHYBRID" {
+			g.basemap = GOOGLEHYBRID
+			g.tileCache = NewTileImageCache()
+		} else if g.TextBoxText == "GOOGLEAERIAL" {
+			g.basemap = GOOGLEAERIAL
+			g.tileCache = NewTileImageCache()
+		} else if g.TextBoxText == "BINGHYBRID" {
+			g.basemap = BINGHYBRID
+			g.tileCache = NewTileImageCache()
+		} else if g.TextBoxText == "BINGAERIAL" {
+			g.basemap = BINGAERIAL
+			g.tileCache = NewTileImageCache()
+		} else if g.TextBoxText == "OSM" {
+			g.basemap = OSM
+			g.tileCache = NewTileImageCache()
 		}
 		g.TextBoxText = ""
 	} else {
@@ -192,10 +216,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	tileOffsetY := centerY - pixelY
 
 	// Calculate the number of tiles needed to cover the window horizontally and vertically
-	//numHorizontalTiles := (g.ScreenWidth / 256) + 2
-	//numVerticalTiles := (g.ScreenHeight / 256) + 2
-
-	// Calculate the number of tiles needed to cover the window horizontally and vertically
 	numHorizontalTiles := int(math.Ceil(float64(g.ScreenWidth)/256)) + 2
 	numVerticalTiles := int(math.Ceil(float64(g.ScreenHeight)/256)) + 2
 
@@ -210,7 +230,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			tileOffsetXForTile := tileOffsetX + ((i - numHorizontalTiles/2) * 256)
 			tileOffsetYForTile := tileOffsetY + ((j - numVerticalTiles/2) * 256)
 			op.GeoM.Translate(float64(tileOffsetXForTile), float64(tileOffsetYForTile))
-			drawTile(screen, &g.tileCache, startTileX+i, startTileY+j, g.zoom, op)
+			drawTile(screen, &g.tileCache, startTileX+i, startTileY+j, g.zoom, g.basemap, op)
 		}
 	}
 
@@ -243,6 +263,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		label := fmt.Sprintf("%.0f'", dist)
 		textDashedLine(screen, g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
 	}
+
+	// GEOTIFF
+	//g.DrawGeoTiff(screen)
 
 	// Draw the current GPS position
 	if g.gps.running {

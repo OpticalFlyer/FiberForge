@@ -3,14 +3,24 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"image/color"
 	"image/jpeg"
+	"image/png"
 	"io"
 	"math"
 	"net/http"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
+)
+
+const (
+	GOOGLEHYBRID = "GOOGLEHYBRID"
+	GOOGLEAERIAL = "GOOGLEAERIAL"
+	BINGHYBRID   = "BINGHYBRID"
+	BINGAERIAL   = "BINGAERIAL"
+	OSM          = "OSM"
 )
 
 type TileImageCache struct {
@@ -29,6 +39,7 @@ type DownloadRequest struct {
 	zoom      int
 	tileX     int
 	tileY     int
+	basemap   string
 }
 
 var downloadQueue = make(chan DownloadRequest, 100)
@@ -41,7 +52,7 @@ func startWorkerPool(numWorkers int) {
 
 func tileDownloader() {
 	for req := range downloadQueue {
-		img, err := downloadTileImage(req.tileX, req.tileY, req.zoom)
+		img, err := downloadTileImage(req.tileX, req.tileY, req.zoom, req.basemap)
 		if err == nil {
 			req.tileCache.Set(req.zoom, req.tileX, req.tileY, img)
 		}
@@ -115,7 +126,7 @@ func (cache *TileImageCache) Get(zoom, x, y int) (*ebiten.Image, bool) {
 	}
 }*/
 
-func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoom int, op *ebiten.DrawImageOptions) {
+func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoom int, basemap string, op *ebiten.DrawImageOptions) {
 	cachedImg, ok := tileCache.Get(zoom, tileX, tileY)
 	if ok {
 		screen.DrawImage(cachedImg, op)
@@ -132,6 +143,7 @@ func drawTile(screen *ebiten.Image, tileCache *TileImageCache, tileX, tileY, zoo
 			zoom:      zoom,
 			tileX:     tileX,
 			tileY:     tileY,
+			basemap:   basemap,
 		}
 	}
 }
@@ -198,16 +210,43 @@ func latLngToScreenCoords(lat, lng, centerLat, centerLon, zoom float64, screenWi
 	return float32(screenX), float32(screenY)
 }
 
-func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
-	url := fmt.Sprintf("https://mt1.google.com/vt/lyrs=s,h&x=%d&y=%d&z=%d", x, y, zoom)
+func downloadTileImage(x, y, zoom int, basemap string) (*ebiten.Image, error) {
+	var url string
+	if basemap == BINGHYBRID {
+		q := getQuadKey(zoom, x, y)
+		url = fmt.Sprintf("http://ecn.t1.tiles.virtualearth.net/tiles/h%s.jpeg?g=129&mkt=en-US&shading=hill&stl=H", q)
+	} else if basemap == BINGAERIAL {
+		q := getQuadKey(zoom, x, y)
+		url = fmt.Sprintf("http://ecn.t1.tiles.virtualearth.net/tiles/a%s.jpeg?g=129&mkt=en-US&shading=hill&stl=H", q)
+	} else if basemap == GOOGLEAERIAL {
+		url = fmt.Sprintf("https://mt1.google.com/vt/lyrs=s&x=%d&y=%d&z=%d", x, y, zoom)
+	} else if basemap == GOOGLEHYBRID {
+		url = fmt.Sprintf("https://mt1.google.com/vt/lyrs=s,h&x=%d&y=%d&z=%d", x, y, zoom)
+	} else {
+		url = fmt.Sprintf("https://tile.openstreetmap.org/%d/%d/%d.png", zoom, x, y)
+	}
 
-	resp, err := http.Get(url)
+	/*resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()*/
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "GeoForge/alpha")
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Something went wrong: %s\n", resp.Status)
 		return nil, fmt.Errorf("failed to download image: %s", resp.Status)
 	}
 
@@ -216,7 +255,12 @@ func downloadTileImage(x, y, zoom int) (*ebiten.Image, error) {
 		return nil, err
 	}
 
-	img, err := jpeg.Decode(bytes.NewReader(data))
+	var img image.Image
+	if basemap == OSM {
+		img, err = png.Decode(bytes.NewReader(data))
+	} else {
+		img, err = jpeg.Decode(bytes.NewReader(data))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -241,4 +285,20 @@ func pointLineSegmentDistance(x, y, x1, y1, x2, y2 float64) float64 {
 
 	// Calculate the distance from the point to the projection point
 	return math.Sqrt(math.Pow(x-projX, 2) + math.Pow(y-projY, 2))
+}
+
+func getQuadKey(zoom, tileX, tileY int) string {
+	var quadKey string
+	for i := zoom; i > 0; i-- {
+		var digit int
+		mask := 1 << (i - 1)
+		if (tileX & mask) != 0 {
+			digit += 1
+		}
+		if (tileY & mask) != 0 {
+			digit += 2
+		}
+		quadKey += fmt.Sprintf("%d", digit)
+	}
+	return quadKey
 }
