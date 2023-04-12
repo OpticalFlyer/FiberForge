@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/adrianmo/go-nmea v1.8.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/hajimehoshi/ebiten/v2 v2.5.0
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	golang.org/x/image v0.6.0

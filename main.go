@@ -6,13 +6,12 @@ import (
 	"log"
 	"math"
 
+	"github.com/atotto/clipboard"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
-
-	"os"
-	"path/filepath"
 )
 
 type Game struct {
@@ -102,8 +101,14 @@ func (g *Game) Update() error {
 			g.basemap = OSM
 			g.tileCache = NewTileImageCache()
 		} else if g.TextBoxText == "LOADKML" {
-			homeDir, _ := os.UserHomeDir()
-			LoadKMLFile(filepath.Join(homeDir, "test.kml"), g)
+			//homeDir, _ := os.UserHomeDir()
+			//LoadKMLFile(filepath.Join(homeDir, "test.kml"), g)
+			clipboardContent, err := clipboard.ReadAll()
+			if err != nil {
+				fmt.Printf("Error reading clipboard: %v\n", err)
+			}
+
+			LoadKMLFile(clipboardContent, g)
 		}
 		g.TextBoxText = ""
 	} else {
