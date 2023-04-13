@@ -237,3 +237,14 @@ func rotatedText(screen *ebiten.Image, x, y, angle float64, clr color.Color, tex
 
 	screen.DrawImage(textImage, textOpts)
 }
+
+func solidLine(screen *ebiten.Image, lat0, lng0, lat1, lng1, centerLat, centerLon, zoom float64, screenWidth, screenHeight int, strokeWidth float32, clr color.Color) {
+	x0, y0 := latLngToScreenCoords(lat0, lng0, centerLat, centerLon, zoom, screenWidth, screenHeight)
+	x1, y1 := latLngToScreenCoords(lat1, lng1, centerLat, centerLon, zoom, screenWidth, screenHeight)
+
+	// Check if the line is within the screen bounds
+	if (x0 >= 0 && x0 <= float32(screenWidth) && y0 >= 0 && y0 <= float32(screenHeight)) ||
+		(x1 >= 0 && x1 <= float32(screenWidth) && y1 >= 0 && y1 <= float32(screenHeight)) {
+		vector.StrokeLine(screen, x0, y0, x1, y1, strokeWidth, clr, false)
+	}
+}

@@ -14,14 +14,31 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+type LinePoint struct {
+	Lat, Lon, Dist float64
+}
+
+type PolyLine struct {
+	Points []LinePoint
+	Color  color.RGBA
+	Width  float32
+}
+
+type PolyLineStyle struct {
+	Color string
+	Width float32
+}
+
 type Game struct {
 	ScreenWidth    int
 	ScreenHeight   int
 	basemap        string
 	TextBoxText    string
 	LastCmdText    string
-	Points         []struct{ Lat, Lon, Dist float64 }
-	Lines          [][]struct{ Lat, Lon, Dist float64 }
+	Line           PolyLine
+	Lines          []PolyLine
+	StyleMap       map[string]map[string]string
+	Styles         map[string]PolyLineStyle
 	PL_activated   bool
 	centerLat      float64
 	centerLon      float64
@@ -42,7 +59,12 @@ func Initialize() (*Game, error) {
 	g.centerLat = 35.156072
 	g.centerLon = -90.051911
 	g.zoom = 5
-	g.basemap = OSM
+	g.basemap = GOOGLEAERIAL
+
+	g.Line.Color = color.RGBA{0, 255, 255, 255}
+	g.Line.Width = 3.0
+	g.StyleMap = make(map[string]map[string]string)
+	g.Styles = make(map[string]PolyLineStyle)
 
 	g.tileCache = NewTileImageCache()
 
@@ -55,22 +77,21 @@ func (g *Game) Update() error {
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && g.PL_activated {
 		mouseX, mouseY := ebiten.CursorPosition()
 		lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
-		if len(g.Points) > 0 {
-			prevPoint := len(g.Points) - 1
-			dist := haversine(g.Points[prevPoint].Lat, g.Points[prevPoint].Lon, lat, lon, EarthRadiusFT)
-			g.Points = append(g.Points, struct{ Lat, Lon, Dist float64 }{Lat: lat, Lon: lon, Dist: dist})
-		} else {
-			g.Points = append(g.Points, struct{ Lat, Lon, Dist float64 }{Lat: lat, Lon: lon, Dist: 0.0})
+		dist := 0.0
+		if len(g.Line.Points) > 0 {
+			prevPoint := len(g.Line.Points) - 1
+			dist = haversine(g.Line.Points[prevPoint].Lat, g.Line.Points[prevPoint].Lon, lat, lon, EarthRadiusFT)
+
 		}
-		//fmt.Printf("Added Point: %f, %f\n", lat, lon)
+		g.Line.Points = append(g.Line.Points, LinePoint{Lat: lat, Lon: lon, Dist: dist})
 	}
 
 	if inpututil.IsKeyJustReleased(ebiten.KeySpace) || inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
 		if g.PL_activated {
 			g.PL_activated = false
-			if len(g.Points) > 0 {
-				g.Lines = append(g.Lines, g.Points)
-				g.Points = nil
+			if len(g.Line.Points) > 0 {
+				g.Lines = append(g.Lines, g.Line)
+				g.Line.Points = nil
 			}
 		} else if g.TextBoxText == "PL" || g.TextBoxText == "" && g.LastCmdText == "PL" {
 			g.PL_activated = true
@@ -100,7 +121,7 @@ func (g *Game) Update() error {
 		} else if g.TextBoxText == "OSM" {
 			g.basemap = OSM
 			g.tileCache = NewTileImageCache()
-		} else if g.TextBoxText == "LOADKML" {
+		} else if g.TextBoxText == "MAPIMPORT" {
 			//homeDir, _ := os.UserHomeDir()
 			//LoadKMLFile(filepath.Join(homeDir, "test.kml"), g)
 			clipboardContent, err := clipboard.ReadAll()
@@ -241,31 +262,31 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw Lines
 
 	dashLength, gapLength := float32(20), float32(40)
-	clr := color.RGBA{255, 255, 255, 255}
 
 	// Draw completed lines
 	for _, line := range g.Lines {
-		numPoints := len(line)
+		numPoints := len(line.Points)
 		if numPoints > 0 {
 			for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
-				label := fmt.Sprintf("%.0f'", line[j].Dist)
-				textDashedLine(screen, line[i].Lat, line[i].Lon, line[j].Lat, line[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
+				//label := fmt.Sprintf("%.0f'", line.Points[j].Dist)
+				//textDashedLine(screen, line.Points[i].Lat, line.Points[i].Lon, line.Points[j].Lat, line.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, line.Width, line.Color, "144F", label)
+				solidLine(screen, line.Points[i].Lat, line.Points[i].Lon, line.Points[j].Lat, line.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, line.Width, line.Color)
 			}
 		}
 	}
 
 	// Draw currently active line
-	numPoints := len(g.Points)
+	numPoints := len(g.Line.Points)
 	if numPoints > 0 {
 		for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
-			label := fmt.Sprintf("%.0f'", g.Points[j].Dist)
-			textDashedLine(screen, g.Points[i].Lat, g.Points[i].Lon, g.Points[j].Lat, g.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
+			label := fmt.Sprintf("%.0f'", g.Line.Points[j].Dist)
+			textDashedLine(screen, g.Line.Points[i].Lat, g.Line.Points[i].Lon, g.Line.Points[j].Lat, g.Line.Points[j].Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, g.Line.Width, g.Line.Color, "144F", label)
 		}
 		mouseX, mouseY := ebiten.CursorPosition()
 		screenX, screenY := screenCoordsToLatLng(mouseX, mouseY, g)
-		dist := haversine(g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, EarthRadiusFT)
+		dist := haversine(g.Line.Points[numPoints-1].Lat, g.Line.Points[numPoints-1].Lon, screenX, screenY, EarthRadiusFT)
 		label := fmt.Sprintf("%.0f'", dist)
-		textDashedLine(screen, g.Points[numPoints-1].Lat, g.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, 3, clr, "144F", label)
+		textDashedLine(screen, g.Line.Points[numPoints-1].Lat, g.Line.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, g.Line.Width, g.Line.Color, "144F", label)
 	}
 
 	// GEOTIFF
