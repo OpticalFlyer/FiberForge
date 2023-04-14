@@ -14,6 +14,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
+type PointObject struct {
+	Lat, Lon float64
+	Color    color.RGBA
+}
 type LinePoint struct {
 	Lat, Lon, Dist float64
 }
@@ -35,11 +39,13 @@ type Game struct {
 	basemap        string
 	TextBoxText    string
 	LastCmdText    string
+	Points         []PointObject
 	Line           PolyLine
 	Lines          []PolyLine
 	StyleMap       map[string]map[string]string
 	Styles         map[string]PolyLineStyle
 	PL_activated   bool
+	PO_activated   bool
 	centerLat      float64
 	centerLon      float64
 	zoom           int
@@ -84,18 +90,28 @@ func (g *Game) Update() error {
 
 		}
 		g.Line.Points = append(g.Line.Points, LinePoint{Lat: lat, Lon: lon, Dist: dist})
+	} else if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && g.PO_activated {
+		mouseX, mouseY := ebiten.CursorPosition()
+		lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
+		clr := color.RGBA{255, 255, 255, 255}
+		g.Points = append(g.Points, PointObject{lat, lon, clr})
 	}
 
 	if inpututil.IsKeyJustReleased(ebiten.KeySpace) || inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
-		if g.PL_activated {
+		if g.PL_activated { // Save new line
 			g.PL_activated = false
 			if len(g.Line.Points) > 0 {
 				g.Lines = append(g.Lines, g.Line)
 				g.Line.Points = nil
 			}
-		} else if g.TextBoxText == "PL" || g.TextBoxText == "" && g.LastCmdText == "PL" {
+		} else if g.TextBoxText == "PL" || g.TextBoxText == "" && g.LastCmdText == "PL" { // Start new line
 			g.PL_activated = true
 			g.LastCmdText = "PL"
+		} else if g.PO_activated { // End point mode
+			g.PO_activated = false
+		} else if g.TextBoxText == "PO" || g.TextBoxText == "" && g.LastCmdText == "PO" { // Start new point
+			g.PO_activated = true
+			g.LastCmdText = "PO"
 		} else if g.TextBoxText == "STARTGPS" {
 			if !g.gps.running {
 				g.gps.StartGPS() // Call StartGPS on the GPS instance
@@ -289,6 +305,17 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		textDashedLine(screen, g.Line.Points[numPoints-1].Lat, g.Line.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, g.Line.Width, g.Line.Color, "144F", label)
 	}
 
+	// Draw point objects
+	if len(g.Points) > 0 {
+		for _, point := range g.Points {
+			pointX, pointY := latLngToScreenCoords(point.Lat, point.Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight)
+			pointRadius := 10.0
+			pointColor := color.RGBA{255, 255, 255, 179}
+
+			vector.DrawFilledCircle(screen, pointX, pointY, float32(pointRadius), pointColor, false)
+		}
+	}
+
 	// GEOTIFF
 	//g.DrawGeoTiff(screen)
 
@@ -305,6 +332,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// Get the current mouse position
 	mouseX, mouseY := ebiten.CursorPosition()
+
+	if g.PO_activated {
+		pointRadius := 10.0
+		pointColor := color.RGBA{128, 128, 128, 26}
+
+		vector.DrawFilledCircle(screen, float32(mouseX), float32(mouseY), float32(pointRadius), pointColor, false)
+	}
 
 	// Draw the crosshair at the mouse position
 	if g.PL_activated {
