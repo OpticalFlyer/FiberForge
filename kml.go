@@ -35,11 +35,16 @@ type Folder struct {
 }
 
 type Placemark struct {
-	Name       string     `xml:"name"`
-	StyleURL   string     `xml:"styleUrl"`
-	Style      Style      `xml:"Style"`
-	Point      Point      `xml:"Point"`
-	LineString LineString `xml:"LineString"`
+	Name          string        `xml:"name"`
+	StyleURL      string        `xml:"styleUrl"`
+	Style         Style         `xml:"Style"`
+	Point         Point         `xml:"Point"`
+	LineString    LineString    `xml:"LineString"`
+	MultiGeometry MultiGeometry `xml:"MultiGeometry"`
+}
+
+type MultiGeometry struct {
+	LineStrings []LineString `xml:"LineString"`
 }
 
 type Point struct {
