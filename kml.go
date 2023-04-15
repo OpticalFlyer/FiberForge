@@ -2,13 +2,18 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"image/color"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 )
 
 type KML struct {
@@ -117,7 +122,7 @@ func processFoldersAndDocuments(folders []Folder, documents []Document, game *Ga
 		for id, pairs := range convertedStyleMap {
 			if _, exists := game.StyleMap[id]; !exists {
 				game.StyleMap[id] = pairs
-				fmt.Printf("Added StyleMap %s - normal: %s, highlight: %s\n", id, pairs["normal"], pairs["highlight"])
+				log.Printf("Added StyleMap %s - normal: %s, highlight: %s\n", id, pairs["normal"], pairs["highlight"])
 			} else {
 				for k, v := range pairs {
 					game.StyleMap[id][k] = v
@@ -130,7 +135,7 @@ func processFoldersAndDocuments(folders []Folder, documents []Document, game *Ga
 		for id, styleEntry := range convertedStyle {
 			if _, exists := game.Styles[id]; !exists {
 				game.Styles[id] = styleEntry
-				fmt.Printf("Added Style %s - Color: %s, Width: %f\n", id, styleEntry.Color, styleEntry.Width)
+				log.Printf("Added Style %s - Color: %s, Width: %f\n", id, styleEntry.Color, styleEntry.Width)
 			} else {
 				game.Styles[id] = styleEntry
 			}
@@ -158,71 +163,79 @@ Sometimes there is an embedded style in the placemark
 */
 func processPlacemarks(placemarks []Placemark, game *Game) error {
 	for _, placemark := range placemarks {
+		var lineStrings []LineString
 
-		// Skip points for now.  Only processing lines.
-		if len(placemark.LineString.Coordinates) == 0 {
+		// Skip points for now. Only processing lines.
+		if len(placemark.LineString.Coordinates) > 0 {
+			lineStrings = append(lineStrings, placemark.LineString)
+		} else if len(placemark.MultiGeometry.LineStrings) > 0 {
+			lineStrings = append(lineStrings, placemark.MultiGeometry.LineStrings...)
+		} else {
 			continue
 		}
 
-		rawLineString := strings.TrimSpace(placemark.LineString.Coordinates)
-		coordinates := strings.Split(strings.TrimSpace(rawLineString), " ")
+		for _, lineString := range lineStrings {
+			rawLineString := strings.TrimSpace(lineString.Coordinates)
+			coordinates := strings.Split(strings.TrimSpace(rawLineString), " ")
 
-		var line PolyLine
+			var line PolyLine
 
-		styleURL := placemark.StyleURL
-		if len(styleURL) > 0 { // Either a StyleMap or Style link
-			if styleURL[0] == '#' {
-				styleURL = styleURL[1:] // Strip leading #
-			}
-
-			if _, exists := game.StyleMap[styleURL]; !exists { // Not a StyleMap link
-				line.Color, _ = hexStringToColor(game.Styles[styleURL].Color)
-				line.Width = game.Styles[styleURL].Width
-			} else { // StyleMap link
-				line.Color, _ = hexStringToColor(game.Styles[game.StyleMap[styleURL]["normal"]].Color)
-				line.Width = game.Styles[game.StyleMap[styleURL]["normal"]].Width
-			}
-		} else { // Embedded style?
-			if len(placemark.Style.LineStyle.Color) > 0 {
-				line.Color, _ = hexStringToColor(placemark.Style.LineStyle.Color)
-			} else {
-				line.Color = color.RGBA{0, 0, 0, 255}
-			}
-			if placemark.Style.LineStyle.Width > 0 {
-				line.Width = float32(placemark.Style.LineStyle.Width)
-			} else {
-				line.Width = 1.0
-			}
-		}
-
-		// Make sure we always have a minimum line width of 1
-		if line.Width < 1 {
-			line.Width = 1
-		}
-
-		for _, coordinate := range coordinates {
-			latLon := strings.Split(coordinate, ",")
-			if len(latLon) >= 2 {
-				lat, err := strconv.ParseFloat(latLon[1], 64)
-				if err != nil {
-					return err
+			styleURL := placemark.StyleURL
+			if len(styleURL) > 0 { // Either a StyleMap or Style link
+				if styleURL[0] == '#' {
+					styleURL = styleURL[1:] // Strip leading #
 				}
 
-				lon, err := strconv.ParseFloat(latLon[0], 64)
-				if err != nil {
-					return err
+				if _, exists := game.StyleMap[styleURL]; !exists { // Not a StyleMap link
+					line.Color, _ = hexStringToColor(game.Styles[styleURL].Color)
+					line.Width = game.Styles[styleURL].Width
+				} else { // StyleMap link
+					line.Color, _ = hexStringToColor(game.Styles[game.StyleMap[styleURL]["normal"]].Color)
+					line.Width = game.Styles[game.StyleMap[styleURL]["normal"]].Width
 				}
-
-				dist := 0.0
-				if len(line.Points) > 0 {
-					dist = haversine(line.Points[len(line.Points)-1].Lat, line.Points[len(line.Points)-1].Lon, lat, lon, EarthRadiusFT)
-
+			} else { // Embedded style?
+				if len(placemark.Style.LineStyle.Color) > 0 {
+					line.Color, _ = hexStringToColor(placemark.Style.LineStyle.Color)
+				} else {
+					line.Color = color.RGBA{0, 0, 0, 255}
 				}
-				line.Points = append(line.Points, LinePoint{Lat: lat, Lon: lon, Dist: dist})
+				if placemark.Style.LineStyle.Width > 0 {
+					line.Width = float32(placemark.Style.LineStyle.Width)
+				} else {
+					line.Width = 1.0
+				}
 			}
+
+			// Make sure we always have a minimum line width of 1
+			if line.Width < 1 {
+				line.Width = 1
+			}
+
+			for _, coordinate := range coordinates {
+				latLon := strings.Split(coordinate, ",")
+				if len(latLon) >= 2 {
+					lat, err := strconv.ParseFloat(latLon[1], 64)
+					if err != nil {
+						return err
+					}
+
+					lon, err := strconv.ParseFloat(latLon[0], 64)
+					if err != nil {
+						return err
+					}
+
+					dist := 0.0
+					if len(line.Points) > 0 {
+						dist = haversine(line.Points[len(line.Points)-1].Lat, line.Points[len(line.Points)-1].Lon, lat, lon, EarthRadiusFT)
+
+					}
+					line.Points = append(line.Points, LinePoint{Lat: lat, Lon: lon, Dist: dist})
+				}
+			}
+			log.Printf("Added line with %d points, Style: %s, Line Width: %f\n", len(line.Points), styleURL, line.Width)
+			game.Lines = append(game.Lines, line)
 		}
-		fmt.Printf("Added line with %d points, Style: %s, Line Width: %f\n", len(line.Points), styleURL, line.Width)
-		game.Lines = append(game.Lines, line)
+
 	}
 
 	return nil
@@ -334,6 +347,31 @@ func LoadKMLFile(filename string, game *Game) error {
 			return err
 		}
 	}
+
+	// Check if the data is UTF-16 encoded and convert it to UTF-8 if necessary
+	if kmlData[0] == 0xFF && kmlData[1] == 0xFE {
+		log.Println("Found UTF-16 little Endian")
+		decoder := unicode.UTF16(unicode.LittleEndian, unicode.ExpectBOM).NewDecoder()
+		kmlData, err = io.ReadAll(transform.NewReader(bytes.NewReader(kmlData), decoder))
+		if err != nil {
+			return err
+		}
+	} else if kmlData[0] == 0xFE && kmlData[1] == 0xFF {
+		log.Println("Found UTF-16 Big Endian")
+		decoder := unicode.UTF16(unicode.BigEndian, unicode.ExpectBOM).NewDecoder()
+		kmlData, err = io.ReadAll(transform.NewReader(bytes.NewReader(kmlData), decoder))
+		if err != nil {
+			return err
+		}
+	}
+
+	kmlString := string(kmlData)
+	// Update the encoding in the XML declaration
+	kmlString = strings.Replace(kmlString, `encoding="UTF-16"`, `encoding="UTF-8"`, 1)
+	// Remove the 'kml:' prefix from the KML data that some files seem to have..
+	kmlString = strings.Replace(kmlString, "<kml:", "<", -1)
+	kmlString = strings.Replace(kmlString, "</kml:", "</", -1)
+	kmlData = []byte(kmlString)
 
 	var kml KML
 	err = xml.Unmarshal(kmlData, &kml)
