@@ -58,6 +58,7 @@ type Game struct {
 	panStartLat    float64
 	panStartLon    float64
 	gps            *GPS
+	numSegments    int
 }
 
 func Initialize() (*Game, error) {
@@ -287,8 +288,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	dashLength, gapLength := float32(20), float32(40)
 
 	// Draw completed lines
+	g.numSegments = 0
 	for _, line := range g.Lines {
 		numPoints := len(line.Points)
+		g.numSegments += numPoints - 1
 		if numPoints > 0 {
 			for i, j := 0, 1; j < numPoints; i, j = i+1, j+1 {
 				//label := fmt.Sprintf("%.0f'", line.Points[j].Dist)
@@ -356,7 +359,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	mouseX, mouseY = ebiten.CursorPosition()
 	lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
-	debugString := fmt.Sprintf("Zoom: %d, Coords: %f, %f", g.zoom, lat, lon)
+	debugString := fmt.Sprintf("Zoom: %d, Coords: %f, %f\n%d Points, %d Lines (%d Segments)\n%d Styles, %d Style Maps\n%.0f TPS",
+		g.zoom, lat, lon, len(g.Points), len(g.Lines), g.numSegments, len(g.Styles), len(g.StyleMap), ebiten.ActualFPS())
 	ebitenutil.DebugPrint(screen, debugString)
 }
 
