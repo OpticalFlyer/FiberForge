@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"strconv"
@@ -347,6 +348,89 @@ func LoadKMLFile(filename string, game *Game) error {
 			return err
 		}
 	}
+
+	err = LoadKML(kmlData, game)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func LoadKMLDroppedFiles(droppedFiles fs.FS, game *Game) error {
+	var kmlData []byte
+
+	files, _ := fs.ReadDir(droppedFiles, ".")
+	for _, fileEntry := range files {
+		if !fileEntry.IsDir() {
+			fileInfo, err := fileEntry.Info()
+			if err != nil {
+				log.Println("Error getting file info:", err)
+				continue
+			}
+			fileSize := fileInfo.Size()
+
+			file, err := droppedFiles.Open(fileEntry.Name())
+			if err != nil {
+				log.Println("Error opening file:", err)
+				continue
+			}
+
+			if strings.HasSuffix(strings.ToLower(fileEntry.Name()), ".kmz") {
+				// Read KMZ file
+				content, err := io.ReadAll(file)
+				if err != nil {
+					return err
+				}
+				contentReader := bytes.NewReader(content)
+
+				r, err := zip.NewReader(contentReader, fileSize)
+				if err != nil {
+					return err
+				}
+
+				// Find the KML file inside the KMZ archive
+				for _, f := range r.File {
+					if strings.HasSuffix(strings.ToLower(f.Name), ".kml") {
+						rc, err := f.Open()
+						if err != nil {
+							return err
+						}
+						defer rc.Close()
+
+						kmlData, err = io.ReadAll(rc)
+						if err != nil {
+							return err
+						}
+
+						break
+					}
+				}
+
+				if kmlData == nil {
+					return fmt.Errorf("no KML file found in the KMZ archive")
+				}
+
+			} else {
+				// Read KML file
+				kmlData, err = io.ReadAll(file)
+				if err != nil {
+					return err
+				}
+			}
+
+			err = LoadKML(kmlData, game)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func LoadKML(kmlData []byte, game *Game) error {
+	var err error
 
 	// Check if the data is UTF-16 encoded and convert it to UTF-8 if necessary
 	if kmlData[0] == 0xFF && kmlData[1] == 0xFE {

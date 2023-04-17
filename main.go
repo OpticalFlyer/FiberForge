@@ -80,6 +80,13 @@ func Initialize() (*Game, error) {
 }
 
 func (g *Game) Update() error {
+	if droppedFiles := ebiten.DroppedFiles(); droppedFiles != nil {
+		err := LoadKMLDroppedFiles(droppedFiles, g)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && g.PL_activated {
 		mouseX, mouseY := ebiten.CursorPosition()
 		lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
