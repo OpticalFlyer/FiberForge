@@ -15,9 +15,13 @@ import (
 )
 
 type PointObject struct {
-	Lat, Lon float64
-	Color    color.RGBA
+	Lat, Lon  float64
+	Color     color.RGBA
+	IconImage *ebiten.Image
+	Scale     float64
+	HotSpot   HotSpot
 }
+
 type LinePoint struct {
 	Lat, Lon, Dist float64
 }
@@ -33,6 +37,14 @@ type PolyLineStyle struct {
 	Width float32
 }
 
+type IconStyleData struct {
+	ID      string
+	Color   string
+	Scale   float64
+	Href    string
+	HotSpot HotSpot
+}
+
 type Game struct {
 	ScreenWidth    int
 	ScreenHeight   int
@@ -44,6 +56,8 @@ type Game struct {
 	Lines          []PolyLine
 	StyleMap       map[string]map[string]string
 	Styles         map[string]PolyLineStyle
+	IconStyles     map[string]IconStyleData
+	IconImages     map[string]*ebiten.Image
 	PL_activated   bool
 	PO_activated   bool
 	centerLat      float64
@@ -72,6 +86,7 @@ func Initialize() (*Game, error) {
 	g.Line.Width = 3.0
 	g.StyleMap = make(map[string]map[string]string)
 	g.Styles = make(map[string]PolyLineStyle)
+	g.IconStyles = make(map[string]IconStyleData)
 
 	g.tileCache = NewTileImageCache()
 
@@ -102,7 +117,7 @@ func (g *Game) Update() error {
 		mouseX, mouseY := ebiten.CursorPosition()
 		lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
 		clr := color.RGBA{255, 255, 255, 255}
-		g.Points = append(g.Points, PointObject{lat, lon, clr})
+		g.Points = append(g.Points, PointObject{Lat: lat, Lon: lon, Color: clr, Scale: 1.0, IconImage: nil})
 	}
 
 	if inpututil.IsKeyJustReleased(ebiten.KeySpace) || inpututil.IsKeyJustReleased(ebiten.KeyEnter) {
@@ -315,14 +330,65 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		textDashedLine(screen, g.Line.Points[numPoints-1].Lat, g.Line.Points[numPoints-1].Lon, screenX, screenY, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight, dashLength, gapLength, g.Line.Width, g.Line.Color, "144F", label)
 	}
 
+	/*// Draw point objects
+	if len(g.Points) > 0 {
+		for _, point := range g.Points {
+			pointX, pointY := latLngToScreenCoords(point.Lat, point.Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight)
+
+			// Check if the point is within the screen bounds
+			if pointX >= 0 && pointX <= float32(g.ScreenWidth) && pointY >= 0 && pointY <= float32(g.ScreenHeight) {
+				pointRadius := 5.0
+				pointColor := point.Color
+
+				vector.DrawFilledCircle(screen, pointX, pointY, float32(pointRadius), pointColor, false)
+				vector.StrokeCircle(screen, pointX, pointY, float32(pointRadius), 2, color.RGBA{0, 0, 0, 255}, false)
+			}
+
+		}
+	}*/
+
 	// Draw point objects
 	if len(g.Points) > 0 {
 		for _, point := range g.Points {
 			pointX, pointY := latLngToScreenCoords(point.Lat, point.Lon, g.centerLat, g.centerLon, float64(g.zoom), g.ScreenWidth, g.ScreenHeight)
-			pointRadius := 10.0
-			pointColor := color.RGBA{255, 255, 255, 179}
 
-			vector.DrawFilledCircle(screen, pointX, pointY, float32(pointRadius), pointColor, false)
+			// Check if the point is within the screen bounds
+			if pointX >= 0 && pointX <= float32(g.ScreenWidth) && pointY >= 0 && pointY <= float32(g.ScreenHeight) {
+				if point.IconImage != nil {
+					// Draw the icon with the hotspot offset from the bottom-left corner
+					op := &ebiten.DrawImageOptions{}
+
+					// Calculate the offset based on hotspot values
+					//offsetX := float32(point.HotSpot.X * float64(point.IconImage.Bounds().Dx()))
+					//offsetY := float32(point.HotSpot.Y * float64(point.IconImage.Bounds().Dy()))
+
+					// If hotspot x and y are both 0, center the icon on pointX and pointY
+					if point.HotSpot.X == 0 && point.HotSpot.Y == 0 {
+						centerX := float32(point.IconImage.Bounds().Dx()) / 2
+						centerY := float32(point.IconImage.Bounds().Dy()) / 2
+						op.GeoM.Translate(float64(pointX-centerX), float64(pointY-centerY))
+					} else {
+						// Apply the hotspot offset
+						op.GeoM.Translate(float64(pointX)-point.HotSpot.X, float64(pointY)-float64(point.IconImage.Bounds().Dy())+point.HotSpot.Y)
+					}
+
+					screen.DrawImage(point.IconImage, op)
+
+					/*// Draw a circle if there's no icon
+					pointRadius := 5.0
+					pointColor := point.Color
+
+					vector.DrawFilledCircle(screen, pointX, pointY, float32(pointRadius), pointColor, false)
+					vector.StrokeCircle(screen, pointX, pointY, float32(pointRadius), 2, color.RGBA{0, 0, 0, 255}, false)*/
+				} else {
+					// Draw a circle if there's no icon
+					pointRadius := 5.0
+					pointColor := point.Color
+
+					vector.DrawFilledCircle(screen, pointX, pointY, float32(pointRadius), pointColor, false)
+					vector.StrokeCircle(screen, pointX, pointY, float32(pointRadius), 2, color.RGBA{0, 0, 0, 255}, false)
+				}
+			}
 		}
 	}
 
@@ -344,14 +410,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	mouseX, mouseY := ebiten.CursorPosition()
 
 	if g.PO_activated {
-		pointRadius := 10.0
+		pointRadius := 5.0
 		pointColor := color.RGBA{128, 128, 128, 26}
 
 		vector.DrawFilledCircle(screen, float32(mouseX), float32(mouseY), float32(pointRadius), pointColor, false)
 	}
 
 	// Draw the crosshair at the mouse position
-	if g.PL_activated {
+	if g.PL_activated || g.PO_activated {
 		drawCrosshair(screen, float32(mouseX), float32(mouseY), 100, color.RGBA{255, 255, 255, 255})
 	} else {
 		drawSquareCrosshair(screen, float32(mouseX), float32(mouseY), 10, 100, color.RGBA{255, 255, 255, 255})
@@ -359,7 +425,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	mouseX, mouseY = ebiten.CursorPosition()
 	lat, lon := screenCoordsToLatLng(mouseX, mouseY, g)
-	debugString := fmt.Sprintf("Zoom: %d, Coords: %f, %f\n%d Points, %d Lines (%d Segments)\n%d Styles, %d Style Maps\n%.0f TPS",
+	debugString := fmt.Sprintf("Zoom: %d, Coords: %f, %f\n%d Points, %d Lines (%d Segments)\n%d Styles, %d Style Maps\n%.0f FPS",
 		g.zoom, lat, lon, len(g.Points), len(g.Lines), g.numSegments, len(g.Styles), len(g.StyleMap), ebiten.ActualFPS())
 	ebitenutil.DebugPrint(screen, debugString)
 }

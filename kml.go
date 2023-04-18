@@ -5,14 +5,17 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"image"
 	"image/color"
 	"io"
 	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/hajimehoshi/ebiten/v2"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 )
@@ -72,6 +75,19 @@ type Pair struct {
 	StyleURL string `xml:"styleUrl"`
 }
 
+/* Sample Style from KML
+<Style id="s_ylw-pushpin">
+		<IconStyle>
+			<color>ff0701fc</color>
+			<scale>0.8</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+</Style>
+*/
+
 type Style struct {
 	XMLName   xml.Name  `xml:"Style"`
 	ID        string    `xml:"id,attr"`
@@ -80,6 +96,7 @@ type Style struct {
 }
 
 type IconStyle struct {
+	Color   string  `xml:"color"`
 	Scale   float64 `xml:"scale"`
 	Icon    Icon    `xml:"Icon"`
 	HotSpot HotSpot `xml:"hotSpot"`
@@ -136,14 +153,33 @@ func processFoldersAndDocuments(folders []Folder, documents []Document, game *Ga
 		for id, styleEntry := range convertedStyle {
 			if _, exists := game.Styles[id]; !exists {
 				game.Styles[id] = styleEntry
-				log.Printf("Added Style %s - Color: %s, Width: %f\n", id, styleEntry.Color, styleEntry.Width)
+				//log.Printf("Added Style %s - Color: %s, Width: %f\n", id, styleEntry.Color, styleEntry.Width)
 			} else {
 				game.Styles[id] = styleEntry
 			}
 		}
 
+		// Update the IconStyles for each Document.Styles
+		convertedIconStyles := convertIconStylesToMap(document.Styles)
+		newHrefs := make(map[string]bool)
+		for id, iconStyleEntry := range convertedIconStyles {
+			if _, exists := game.IconStyles[id]; !exists {
+				game.IconStyles[id] = iconStyleEntry
+				log.Printf("Added IconStyle %s - Color: %s, Scale: %f, Hotspot (%.0f, %.0f), Href: %s\n", id, iconStyleEntry.Color, iconStyleEntry.Scale, iconStyleEntry.HotSpot.X, iconStyleEntry.HotSpot.X, iconStyleEntry.Href)
+				if len(iconStyleEntry.Href) > 0 {
+					newHrefs[iconStyleEntry.Href] = true
+				}
+			}
+		}
+
+		// Download and process new IconStyle images
+		err := downloadIconImages(game, newHrefs)
+		if err != nil {
+			return err
+		}
+
 		// Process Placemarks within the document with no folder
-		err := processPlacemarks(document.Placemarks, game)
+		err = processPlacemarks(document.Placemarks, game)
 		if err != nil {
 			return err
 		}
@@ -158,6 +194,86 @@ func processFoldersAndDocuments(folders []Folder, documents []Document, game *Ga
 	return nil
 }
 
+func convertIconStylesToMap(styles []Style) map[string]IconStyleData {
+	convertedMap := make(map[string]IconStyleData)
+
+	for _, style := range styles {
+		convertedMap[style.ID] = IconStyleData{
+			ID:      style.ID,
+			Color:   style.IconStyle.Color,
+			Scale:   style.IconStyle.Scale,
+			Href:    style.IconStyle.Icon.Href,
+			HotSpot: style.IconStyle.HotSpot,
+		}
+	}
+
+	return convertedMap
+}
+
+func downloadIconImages(game *Game, hrefs map[string]bool) error {
+	if game.IconImages == nil {
+		game.IconImages = make(map[string]*ebiten.Image)
+	}
+
+	for href := range hrefs {
+		if _, exists := game.IconImages[href]; !exists {
+			img, err := downloadAndDecodeImage(href)
+			if err != nil {
+				return err
+			}
+			game.IconImages[href] = ebiten.NewImageFromImage(img)
+			log.Printf("Downloaded image: %s\n", href)
+		}
+	}
+	return nil
+}
+
+func downloadAndDecodeImage(url string) (image.Image, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	img, _, err := image.Decode(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+func convertStyleMapsToMap(styleMaps []StyleMap) map[string]map[string]string {
+	styleMapMap := make(map[string]map[string]string)
+
+	for _, styleMap := range styleMaps {
+		pairMap := make(map[string]string)
+		for _, pair := range styleMap.Pairs {
+			styleURL := pair.StyleURL
+			if len(styleURL) > 0 && styleURL[0] == '#' {
+				styleURL = styleURL[1:]
+			}
+
+			pairMap[pair.Key] = styleURL
+		}
+		styleMapMap[styleMap.ID] = pairMap
+	}
+
+	return styleMapMap
+}
+
+func convertStylesToMap(styles []Style) map[string]PolyLineStyle {
+	convertedMap := make(map[string]PolyLineStyle)
+
+	for _, style := range styles {
+		convertedMap[style.ID] = PolyLineStyle{
+			Color: style.LineStyle.Color,
+			Width: float32(style.LineStyle.Width),
+		}
+	}
+
+	return convertedMap
+}
+
 /*
 Sometimes there is an embedded style in the placemark
 <Style><LineStyle><color>FF00ffff</color><width>5</width></LineStyle></Style>
@@ -165,16 +281,20 @@ Sometimes there is an embedded style in the placemark
 func processPlacemarks(placemarks []Placemark, game *Game) error {
 	for _, placemark := range placemarks {
 		var lineStrings []LineString
+		var points []Point
 
-		// Skip points for now. Only processing lines.
+		// Check for LineString, MultiGeometry or Point
 		if len(placemark.LineString.Coordinates) > 0 {
 			lineStrings = append(lineStrings, placemark.LineString)
 		} else if len(placemark.MultiGeometry.LineStrings) > 0 {
 			lineStrings = append(lineStrings, placemark.MultiGeometry.LineStrings...)
+		} else if len(placemark.Point.Coordinates) > 0 {
+			points = append(points, placemark.Point)
 		} else {
 			continue
 		}
 
+		// Process lines
 		for _, lineString := range lineStrings {
 			rawLineString := strings.TrimSpace(lineString.Coordinates)
 			coordinates := strings.Split(strings.TrimSpace(rawLineString), " ")
@@ -213,6 +333,7 @@ func processPlacemarks(placemarks []Placemark, game *Game) error {
 			}
 
 			for _, coordinate := range coordinates {
+				// In KMLs, longitude comes before latitude
 				latLon := strings.Split(coordinate, ",")
 				if len(latLon) >= 2 {
 					lat, err := strconv.ParseFloat(latLon[1], 64)
@@ -237,41 +358,79 @@ func processPlacemarks(placemarks []Placemark, game *Game) error {
 			game.Lines = append(game.Lines, line)
 		}
 
+		/*// Process Points
+		for _, point := range points {
+			// In KMLs, longitude comes before latitude
+			latLon := strings.Split(point.Coordinates, ",")
+			if len(latLon) >= 2 {
+				lat, err := strconv.ParseFloat(latLon[1], 64)
+				if err != nil {
+					return err
+				}
+
+				lon, err := strconv.ParseFloat(latLon[0], 64)
+				if err != nil {
+					return err
+				}
+
+				game.Points = append(game.Points, PointObject{Lat: lat, Lon: lon, Color: color.RGBA{255, 0, 0, 255}})
+			}
+		}*/
+
+		// Process Points
+		for _, point := range points {
+			// In KMLs, longitude comes before latitude
+			latLon := strings.Split(point.Coordinates, ",")
+			if len(latLon) >= 2 {
+				lat, err := strconv.ParseFloat(latLon[1], 64)
+				if err != nil {
+					return err
+				}
+
+				lon, err := strconv.ParseFloat(latLon[0], 64)
+				if err != nil {
+					return err
+				}
+
+				styleURL := placemark.StyleURL
+				var iconHref string
+				var iconScale float64
+				var iconHotSpot HotSpot
+				if len(styleURL) > 0 {
+					if styleURL[0] == '#' {
+						styleURL = styleURL[1:] // Strip leading #
+					}
+
+					if _, exists := game.StyleMap[styleURL]; !exists { // Not a StyleMap link
+						iconHref = game.IconStyles[styleURL].Href
+						iconScale = game.IconStyles[styleURL].Scale
+						iconHotSpot = game.IconStyles[styleURL].HotSpot
+					} else { // StyleMap link
+						iconHref = game.IconStyles[game.StyleMap[styleURL]["normal"]].Href
+						iconScale = game.IconStyles[game.StyleMap[styleURL]["normal"]].Scale
+						iconHotSpot = game.IconStyles[game.StyleMap[styleURL]["normal"]].HotSpot
+					}
+				} else { // Embedded style?
+					iconHref = placemark.Style.IconStyle.Icon.Href
+					iconScale = placemark.Style.IconStyle.Scale
+					iconHotSpot = placemark.Style.IconStyle.HotSpot
+				}
+
+				iconImage := game.IconImages[iconHref]
+
+				game.Points = append(game.Points, PointObject{
+					Lat:       lat,
+					Lon:       lon,
+					Color:     color.RGBA{255, 0, 0, 255},
+					IconImage: iconImage,
+					Scale:     iconScale,
+					HotSpot:   iconHotSpot,
+				})
+			}
+		}
 	}
 
 	return nil
-}
-
-func convertStyleMapsToMap(styleMaps []StyleMap) map[string]map[string]string {
-	styleMapMap := make(map[string]map[string]string)
-
-	for _, styleMap := range styleMaps {
-		pairMap := make(map[string]string)
-		for _, pair := range styleMap.Pairs {
-			styleURL := pair.StyleURL
-			if len(styleURL) > 0 && styleURL[0] == '#' {
-				styleURL = styleURL[1:]
-			}
-
-			pairMap[pair.Key] = styleURL
-		}
-		styleMapMap[styleMap.ID] = pairMap
-	}
-
-	return styleMapMap
-}
-
-func convertStylesToMap(styles []Style) map[string]PolyLineStyle {
-	convertedMap := make(map[string]PolyLineStyle)
-
-	for _, style := range styles {
-		convertedMap[style.ID] = PolyLineStyle{
-			Color: style.LineStyle.Color,
-			Width: float32(style.LineStyle.Width),
-		}
-	}
-
-	return convertedMap
 }
 
 func hexStringToColor(hex string) (color.RGBA, error) {
