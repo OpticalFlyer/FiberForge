@@ -5,15 +5,15 @@ Execute and complete commands with space or return/enter.  Space or return witho
 
 ### Command List
 
-PL - Draw poly line
-PO - Draw point
-POL - Draw polygon
+PL - Draw poly line  
+PO - Draw point  
+POL - Draw polygon  
 
-OSM - OpenStreetMap base map
-GOOGLEAERIAL - Google aerial base map
-GOOGLEHYBRID - Google hybrid base map
-BINGAERIAL - Bing aerial base map
-BINGHYBRID- Bing hybrid base map
+OSM - OpenStreetMap base map  
+GOOGLEAERIAL - Google aerial base map  
+GOOGLEHYBRID - Google hybrid base map  
+BINGAERIAL - Bing aerial base map  
+BINGHYBRID- Bing hybrid base map  
 
 MAPIMPORT - Load KML or KMZ from file path on clipboard
 
