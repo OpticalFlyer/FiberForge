@@ -1,4 +1,4 @@
-# Hyperion
+# FiberForge
 An experimental GIS/CAD project written in Go with Ebitengine.
 
 Execute and complete commands with space or return/enter.  Space or return without a command executes last command.  For example, PL`<space>` to begin a polyline, `<space>` to complete the polyline.  `<space>` again by itself to start a new polyline.
